@@ -4,3 +4,4 @@ pydantic==2.13.4
 asyncpg==0.31.0
 qdrant-client==1.19.0
 fastembed==0.8.0
+mcp==2.2.0
