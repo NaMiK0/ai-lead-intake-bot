@@ -9,7 +9,7 @@ Telegram-бот, который разбирает сырые сообщения
 ## Быстрый старт
 
 ```bash
-docker compose up -d postgres   # локальная БД (см. docker-compose.yml)
+docker compose up -d postgres qdrant   # локальные БД (см. docker-compose.yml)
 pip install -r requirements.txt
 cp .env.example .env   # и подставь свои токены
 export $(cat .env | xargs)
@@ -22,6 +22,11 @@ python main.py
 - `DATABASE_URL` — строка подключения к Postgres; для локального
   `docker compose up -d postgres` значение по умолчанию уже подходит и
   указано в `.env.example`. Схема БД создаётся автоматически при старте бота.
+- `QDRANT_URL` (+ `QDRANT_API_KEY` для облака) — для RAG (поиск похожих
+  прошлых заявок); для локального `docker compose up -d qdrant` значение по
+  умолчанию уже подходит. Коллекция создаётся автоматически при старте бота.
+  При первом запуске модель эмбеддингов (~225 МБ) скачивается один раз и
+  кэшируется — старт может занять чуть дольше.
 
 ## Структура проекта
 
@@ -35,8 +40,8 @@ bot/
 ├── handlers.py   # aiogram-хэндлеры
 ├── app.py        # сборка и запуск бота
 ├── storage/      # персистентность заявок (Postgres, asyncpg, без ORM)
-├── rag/          # 🔲 эмбеддинги и поиск похожих заявок (Qdrant) — в разработке
+├── rag/          # эмбеддинги (fastembed) и поиск похожих заявок (Qdrant)
 └── mcp/          # 🔲 MCP-сервер поверх storage/rag — в разработке
 main.py             # точка входа
-docker-compose.yml  # локальный Postgres для разработки
+docker-compose.yml  # локальные Postgres + Qdrant для разработки
 ```

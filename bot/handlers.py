@@ -11,7 +11,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from openai import AsyncOpenAI
 
-from . import storage
+from . import rag, storage
 from .config import MAX_CARDS, MAX_INPUT_CHARS, log
 from .dedup import already_processed, is_duplicate_text
 from .llm import AllModelsFailed, analyze
@@ -135,7 +135,7 @@ async def on_text(message: Message) -> None:
         # обесценивать искусственным сообщением об ошибке.
         if it.kind == "lead":
             try:
-                await storage.save_lead(
+                record = await storage.save_lead(
                     it,
                     chat_id=message.chat.id,
                     message_id=message.message_id,
@@ -143,6 +143,14 @@ async def on_text(message: Message) -> None:
                 )
             except Exception as e:  # noqa: BLE001 — запись в БД необязательна для ответа клиенту
                 log.exception("Не удалось сохранить заявку в БД: %s", e)
+                continue
+
+            # Вектор для RAG — отдельный try/except: заявка уже сохранена в
+            # Postgres (источник правды), сбой Qdrant не должен это обесценивать.
+            try:
+                await rag.upsert_lead_vector(record.id, text)
+            except Exception as e:  # noqa: BLE001 — RAG необязателен для ответа клиенту
+                log.exception("Не удалось сохранить вектор заявки в Qdrant: %s", e)
 
 
 @dp.message()

@@ -27,6 +27,28 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 # =============================================================================
+#  RAG (Qdrant + локальные эмбеддинги)
+# =============================================================================
+
+# Локально — Qdrant из docker-compose.yml (docker compose up -d qdrant),
+# в проде — Qdrant Cloud (URL с API-ключом, ещё не подключено — Задача 7).
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333").strip()
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "").strip() or None
+
+RAG_COLLECTION = "leads"
+
+# fastembed (ONNX через onnxruntime, без torch — легче для деплоя на
+# бесплатный тариф). Мультиязычная модель, векторы size=384/cosine —
+# проверено вживую на русских формулировках заявок перед выбором
+# (см. SPEC.md, Задача 4): парафразы одной темы дают cosine ~0.65-0.69,
+# разные темы — ~0.2-0.4.
+RAG_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+RAG_VECTOR_SIZE = 384
+
+RAG_TOP_K = 3            # сколько похожих заявок подмешивать в контекст
+RAG_SCORE_THRESHOLD = 0.55  # ниже — считаем несвязанным, не показываем модели
+
+# =============================================================================
 #  LLM (OpenRouter)
 # =============================================================================
 

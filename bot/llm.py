@@ -24,6 +24,7 @@ from typing import Optional
 
 from openai import AsyncOpenAI
 
+from . import rag
 from .config import (
     ATTEMPTS_PER_MODEL,
     BACKOFF_BASE_S,
@@ -35,6 +36,7 @@ from .config import (
     log,
 )
 from .models import Extraction
+from .storage.models import LeadRecord
 
 SYSTEM_PROMPT = """Ты — ассистент, который разбирает входящие заявки клиентов для IT-студии \
 (услуги: CRM, сайты, боты, автоматизация, интеграции). Твоя задача — превратить сырое \
@@ -182,6 +184,40 @@ class AllModelsFailed(Exception):
     """Все модели недоступны/не ответили корректно."""
 
 
+def _build_context_message(similar: list[LeadRecord]) -> Optional[dict]:
+    """Похожие прошлые заявки (RAG) как дополнительное системное сообщение.
+    Явно помечены как ЧУЖИЕ прошлые заявки — модель не должна путать их
+    контакты/детали с текущим сообщением клиента, только опираться на них
+    для лучшего понимания сути/категории/срочности текущего запроса."""
+    if not similar:
+        return None
+    lines = [
+        "Контекст (RAG): вот похожие по смыслу заявки из ПРОШЛОГО, от ДРУГИХ клиентов. "
+        "Это не текущее сообщение — не бери из них контакт/имя/детали для текущей карточки. "
+        "Используй только чтобы точнее определить категорию и суть текущего запроса:"
+    ]
+    for i, lead in enumerate(similar, start=1):
+        lines.append(
+            f"{i}. категория={lead.category or '?'}; запрос={lead.request or '?'}; "
+            f"срочность={lead.urgency or '?'}"
+        )
+    return {"role": "system", "content": "\n".join(lines)}
+
+
+async def _fetch_similar_context(user_text: str) -> Optional[dict]:
+    """Похожие прошлые заявки для user_text. RAG — вспомогательный контур:
+    любой его сбой (Qdrant недоступен, модель не загрузилась и т.п.) не
+    должен ронять основной цикл извлечения, только лишать его контекста."""
+    try:
+        similar = await rag.similar_leads(user_text)
+    except Exception as e:  # noqa: BLE001 — RAG необязателен для ответа клиенту
+        log.warning("RAG similar_leads не сработал, продолжаем без контекста: %s", e)
+        return None
+    if similar:
+        log.info("RAG: найдено %d похожих прошлых заявок для контекста.", len(similar))
+    return _build_context_message(similar)
+
+
 def build_client() -> AsyncOpenAI:
     """Клиент OpenAI SDK, направленный на OpenRouter (OpenAI-совместимый API)."""
     return AsyncOpenAI(
@@ -196,8 +232,18 @@ def build_client() -> AsyncOpenAI:
     )
 
 
-async def _call_one(client: AsyncOpenAI, model: str, user_text: str) -> Extraction:
+async def _call_one(
+    client: AsyncOpenAI,
+    model: str,
+    user_text: str,
+    context_message: Optional[dict],
+) -> Extraction:
     """Один вызов конкретной модели. Бросает исключение при любой проблеме."""
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if context_message is not None:
+        messages.append(context_message)
+    messages.append({"role": "user", "content": user_text})
+
     resp = await client.chat.completions.create(
         model=model,
         # 0.0: это структурированная экстракция, а не творческая генерация —
@@ -205,10 +251,7 @@ async def _call_one(client: AsyncOpenAI, model: str, user_text: str) -> Extracti
         # соблюдается защита от prompt-инъекций, см. коммит).
         temperature=0.0,
         max_tokens=1200,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_text},
-        ],
+        messages=messages,
         tools=TOOLS,
         tool_choice={"type": "function", "function": {"name": TOOL_NAME}},
     )
@@ -234,12 +277,18 @@ async def analyze(client: AsyncOpenAI, user_text: str) -> Extraction:
     """
     Прогоняем текст через каскад моделей. Первая, что ответит валидным
     вызовом инструмента, — побеждает. Если ни одна не смогла — AllModelsFailed.
+
+    Перед этим ищем похожие по смыслу прошлые заявки (RAG, bot.rag) и, если
+    нашлись, передаём их моделям как дополнительный контекст — один раз для
+    всего каскада, независимо от того, какая модель в итоге ответит.
     """
+    context_message = await _fetch_similar_context(user_text)
+
     last_err: Optional[Exception] = None
     for model in MODELS:
         for attempt in range(1, ATTEMPTS_PER_MODEL + 1):
             try:
-                result = await _call_one(client, model, user_text)
+                result = await _call_one(client, model, user_text, context_message)
                 if not result.items:
                     raise ValueError("модель вернула пустой список items")
                 log.info("Модель ответила: %s (попытка %d)", model, attempt)

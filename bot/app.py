@@ -14,7 +14,7 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from . import handlers, storage
+from . import handlers, rag, storage
 from .config import DATABASE_URL, TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, log
 from .handlers import dp
 from .llm import build_client
@@ -40,6 +40,14 @@ async def main() -> None:
     handlers.llm_client = build_client()
     await storage.init_pool(DATABASE_URL)
 
+    # RAG — необязательный контур (см. bot/rag): его сбои в рантайме не
+    # роняют обработку сообщений, поэтому и здесь недоступный Qdrant не
+    # должен блокировать старт бота — просто работаем без похожих заявок.
+    try:
+        await rag.init_rag()
+    except Exception as e:  # noqa: BLE001 — RAG необязателен для работы бота
+        log.error("RAG-контур не инициализирован (бот продолжит без него): %s", e)
+
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
@@ -53,4 +61,5 @@ async def main() -> None:
     finally:
         await handlers.llm_client.close()
         await storage.close_pool()
+        await rag.close_rag()
         await bot.session.close()
