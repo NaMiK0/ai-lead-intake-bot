@@ -22,15 +22,17 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 #  LLM (OpenRouter)
 # =============================================================================
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Каскад бесплатных моделей. Порядок = приоритет. Список можно править под себя.
-# Если slug устарел и вернёт ошибку — бот просто перейдёт к следующему.
-# openrouter/free — авто-роутер, сам выбирает доступную бесплатную модель
-# (страховка на случай, если все конкретные slug'и протухли).
+# Каскад бесплатных моделей. Порядок = приоритет. Список можно править под себя
+# (сверить актуальность и поддержку tool calling: GET /api/v1/models,
+# поле supported_parameters). Если slug устарел и вернёт ошибку — бот просто
+# перейдёт к следующему. openrouter/free — авто-роутер, сам выбирает
+# доступную бесплатную модель (страховка на случай, если все конкретные
+# slug'и протухли).
 MODELS = [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "openai/gpt-oss-120b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "openrouter/free",
 ]
 

@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-import httpx
 from aiogram import Dispatcher, F
 from aiogram.enums import ChatAction
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
+from openai import AsyncOpenAI
 
 from .config import MAX_CARDS, MAX_INPUT_CHARS, log
 from .dedup import already_processed, is_duplicate_text
@@ -40,9 +40,9 @@ HELP = (
 # в сообщении нашлась хотя бы одна реальная заявка.
 CONFIRMATION = "✅ Спасибо, ваша заявка принята! Мы свяжемся с вами в ближайшее время."
 
-# httpx-клиент создаётся один раз при старте (переиспользуем соединения).
-# Устанавливается из bot/app.py:main() перед стартом polling/webhook.
-http_client: Optional[httpx.AsyncClient] = None
+# LLM-клиент (openai SDK, направлен на OpenRouter) создаётся один раз при
+# старте. Устанавливается из bot/app.py:main() перед стартом polling/webhook.
+llm_client: Optional[AsyncOpenAI] = None
 
 
 @dp.message(CommandStart())
@@ -83,9 +83,9 @@ async def on_text(message: Message) -> None:
         pass
 
     # 5) Прогон через каскад моделей.
-    assert http_client is not None
+    assert llm_client is not None
     try:
-        result = await analyze(http_client, text)
+        result = await analyze(llm_client, text)
     except AllModelsFailed as e:
         log.error("Все модели недоступны: %s", e)
         await message.answer(

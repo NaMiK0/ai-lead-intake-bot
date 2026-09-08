@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Точка сборки приложения: создаёт Bot/httpx-клиент, запускает polling.
+Точка сборки приложения: создаёт Bot/LLM-клиент, запускает polling.
 
 TODO(Задача 7, SPEC.md): в проде это заменится на webhook-режим (aiohttp
 web-app вместо dp.start_polling) для деплоя на Render. Локальная разработка,
@@ -10,7 +10,6 @@ web-app вместо dp.start_polling) для деплоя на Render. Лока
 
 from __future__ import annotations
 
-import httpx
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -18,6 +17,7 @@ from aiogram.enums import ParseMode
 from . import handlers
 from .config import TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, log
 from .handlers import dp
+from .llm import build_client
 
 
 async def main() -> None:
@@ -35,7 +35,7 @@ async def main() -> None:
         )
         return
 
-    handlers.http_client = httpx.AsyncClient()
+    handlers.llm_client = build_client()
 
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
@@ -48,5 +48,5 @@ async def main() -> None:
         # чтобы не отвечать на старые сообщения после простоя/перезапуска.
         await dp.start_polling(bot, drop_pending_updates=True)
     finally:
-        await handlers.http_client.aclose()
+        await handlers.llm_client.close()
         await bot.session.close()
