@@ -1,0 +1,35 @@
+# Render Blueprint — описывает деплой бота как код, вместо ручной настройки
+# через дашборд. Использование: Render → New → Blueprint → указать этот
+# репозиторий. Секреты (sync: false) Render попросит ввести один раз в
+# дашборде при создании — в этом файле их нет и быть не может.
+#
+# Postgres и Qdrant — managed-сервисы (Neon, Qdrant Cloud), не описаны здесь:
+# Render Blueprint управляет только тем, что хостится на самом Render.
+services:
+  - type: web
+    name: lead-bot
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: BOT_MODE
+        value: webhook
+      # WEBHOOK_URL нарочно не задан — bot/config.py берёт его из
+      # RENDER_EXTERNAL_URL, который Render проставляет сам.
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
