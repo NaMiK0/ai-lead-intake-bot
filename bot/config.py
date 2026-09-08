@@ -19,6 +19,14 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 
 # =============================================================================
+#  БАЗА ДАННЫХ (Postgres)
+# =============================================================================
+
+# Локально — Postgres из docker-compose.yml (docker compose up -d postgres),
+# в проде — строка подключения от managed-провайдера (например Neon).
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+# =============================================================================
 #  LLM (OpenRouter)
 # =============================================================================
 

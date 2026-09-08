@@ -14,8 +14,8 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from . import handlers
-from .config import TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, log
+from . import handlers, storage
+from .config import DATABASE_URL, TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, log
 from .handlers import dp
 from .llm import build_client
 
@@ -27,6 +27,8 @@ async def main() -> None:
         missing.append("TELEGRAM_BOT_TOKEN")
     if not OPENROUTER_API_KEY:
         missing.append("OPENROUTER_API_KEY")
+    if not DATABASE_URL:
+        missing.append("DATABASE_URL")
     if missing:
         log.error(
             "Не заданы переменные окружения: %s. "
@@ -36,6 +38,7 @@ async def main() -> None:
         return
 
     handlers.llm_client = build_client()
+    await storage.init_pool(DATABASE_URL)
 
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
@@ -49,4 +52,5 @@ async def main() -> None:
         await dp.start_polling(bot, drop_pending_updates=True)
     finally:
         await handlers.llm_client.close()
+        await storage.close_pool()
         await bot.session.close()

@@ -11,6 +11,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from openai import AsyncOpenAI
 
+from . import storage
 from .config import MAX_CARDS, MAX_INPUT_CHARS, log
 from .dedup import already_processed, is_duplicate_text
 from .llm import AllModelsFailed, analyze
@@ -127,6 +128,21 @@ async def on_text(message: Message) -> None:
                 "Извините, часть вашей заявки не удалось обработать. "
                 "Пожалуйста, попробуйте отправить сообщение ещё раз."
             )
+            continue
+
+        # Сохраняем реальную заявку в БД. Отдельный try/except: карточка
+        # клиенту уже отправлена успешно, сбой записи в БД не должен это
+        # обесценивать искусственным сообщением об ошибке.
+        if it.kind == "lead":
+            try:
+                await storage.save_lead(
+                    it,
+                    chat_id=message.chat.id,
+                    message_id=message.message_id,
+                    original_text=text,
+                )
+            except Exception as e:  # noqa: BLE001 — запись в БД необязательна для ответа клиенту
+                log.exception("Не удалось сохранить заявку в БД: %s", e)
 
 
 @dp.message()
