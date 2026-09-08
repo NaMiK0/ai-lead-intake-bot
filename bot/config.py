@@ -8,8 +8,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import re
 
 # =============================================================================
 #  СЕКРЕТЫ (только из окружения)
@@ -47,7 +49,19 @@ WEBHOOK_PATH = "/webhook"
 # X-Telegram-Bot-Api-Secret-Token) — aiogram проверяет его сам. Секрет — не
 # часть URL (в отличие от частой практики прятать токен в пути), чтобы не
 # оседал в логах/реферерах.
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
+#
+# Telegram допускает в secret_token только [A-Za-z0-9_-], 1-256 символов —
+# генератор случайных значений Render (generateValue в render.yaml) этого
+# не гарантирует и может отдать символы вроде "+"/"/" (проверено вживую:
+# "Bad Request: secret token contains illegal characters"). Вместо того
+# чтобы полагаться на формат чужого генератора, нормализуем сами: если в
+# значении есть недопустимые символы — детерминированно хешируем его в
+# hex (только 0-9a-f, точно проходит) вместо использования как есть.
+_raw_webhook_secret = os.getenv("WEBHOOK_SECRET", "").strip()
+if _raw_webhook_secret and not re.fullmatch(r"[A-Za-z0-9_-]{1,256}", _raw_webhook_secret):
+    WEBHOOK_SECRET = hashlib.sha256(_raw_webhook_secret.encode()).hexdigest()
+else:
+    WEBHOOK_SECRET = _raw_webhook_secret
 
 # =============================================================================
 #  БАЗА ДАННЫХ (Postgres)
