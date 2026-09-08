@@ -135,11 +135,14 @@ python main.py
 | `TELEGRAM_BOT_TOKEN`   | да          | Токен от [@BotFather](https://t.me/BotFather).                              |
 | `OPENROUTER_API_KEY`   | да          | Ключ с [openrouter.ai/keys](https://openrouter.ai/keys).                    |
 | `DATABASE_URL`         | да          | Строка подключения к Postgres. Схема создаётся автоматически при старте.    |
+| `RAG_ENABLED`          | нет         | `true` (по умолчанию) / `false`. См. [ограничения](#известные-ограничения). |
 | `QDRANT_URL`           | нет         | URL Qdrant для RAG. По умолчанию — локальный (`http://localhost:6333`).     |
 | `QDRANT_API_KEY`       | нет         | Нужен только для облачного Qdrant; для локального — оставить пустым.        |
+| `BOT_MODE`             | нет         | `polling` (по умолчанию, локально) / `webhook` (прод).                      |
+| `WEBHOOK_URL`,`WEBHOOK_SECRET`,`PORT` | нет | Только для `BOT_MODE=webhook` — см. `.env.example`.            |
 
-Если `QDRANT_URL` недоступен — бот всё равно работает, просто без похожих
-прошлых заявок в контексте LLM.
+Если `QDRANT_URL` недоступен (или `RAG_ENABLED=false`) — бот всё равно
+работает, просто без похожих прошлых заявок в контексте LLM.
 
 ## MCP-сервер
 
@@ -171,7 +174,32 @@ Developer → Edit Config):
 Требует запущенных локальных `postgres`/`qdrant` (`docker compose up -d`).
 После правки конфига — перезапустить Claude Desktop.
 
-## Статус
+## Деплой
 
-Бот работает локально (long polling). Деплой (webhook-режим, постоянный
-бесплатный хостинг) — в работе, следующий шаг.
+Прод — [Render](https://render.com) (бесплатный web-сервис, webhook-режим) +
+[Neon](https://neon.tech) (Postgres). Деплой — через `render.yaml`
+(Render Blueprint), а не ручную настройку в дашборде:
+
+1. Neon: создать проект, взять **прямую (Direct/Unpooled)** строку
+   подключения — не Pooled: `asyncpg` использует серверные prepared
+   statements, которые конфликтуют с транзакционным пулингом PgBouncer у
+   Neon по умолчанию.
+2. Render → **New → Blueprint** → указать этот репозиторий. Render найдёт
+   `render.yaml` и попросит ввести секреты (`TELEGRAM_BOT_TOKEN`,
+   `OPENROUTER_API_KEY`, `DATABASE_URL`) — без кавычек, в отличие от `.env`.
+   Остальное (`BOT_MODE=webhook`, `WEBHOOK_SECRET`, порт) проставится само.
+3. Deploy Blueprint. `WEBHOOK_URL` брать не нужно — берётся из
+   `RENDER_EXTERNAL_URL`, который Render проставляет сам.
+
+### Известные ограничения
+
+- **RAG выключен на бесплатном тарифе Render** (`RAG_ENABLED=false` в
+  `render.yaml`). Причина — измерено вживую: модель эмбеддингов при загрузке
+  реально потребляет ~600 МБ RAM (не помогают ни `threads=1`, ни отключение
+  memory arena onnxruntime), а лимит бесплатного тарифа — 512 МБ, процесс
+  падает по OOM ещё до подключения к Qdrant. RAG полностью рабочий и
+  проверенный локально (см. выше) — на проде это осознанный компромисс
+  ресурсов бесплатного хостинга, а не недоделанная фича; сам приём и
+  сохранение заявок эту особенность никак не задевает.
+- Бесплатный Render засыпает при простое — первый запрос после паузы может
+  обрабатываться на несколько десятков секунд дольше обычного.

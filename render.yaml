@@ -3,8 +3,14 @@
 # репозиторий. Секреты (sync: false) Render попросит ввести один раз в
 # дашборде при создании — в этом файле их нет и быть не может.
 #
-# Postgres и Qdrant — managed-сервисы (Neon, Qdrant Cloud), не описаны здесь:
-# Render Blueprint управляет только тем, что хостится на самом Render.
+# Postgres — managed-сервис (Neon), не описан здесь: Render Blueprint
+# управляет только тем, что хостится на самом Render.
+#
+# RAG_ENABLED=false: модель эмбеддингов при загрузке реально потребляет
+# ~600 МБ RAM (замерено вживую) — не влезает в лимит бесплатного тарифа
+# Render (512 МБ) и валит процесс OOM. RAG остаётся полностью рабочим и
+# проверенным локально (см. SPEC.md/README) — здесь он просто выключен,
+# поэтому Qdrant Cloud для прод-инстанса тоже не нужен.
 services:
   - type: web
     name: lead-bot
@@ -23,13 +29,11 @@ services:
       # RENDER_EXTERNAL_URL, который Render проставляет сам.
       - key: WEBHOOK_SECRET
         generateValue: true
+      - key: RAG_ENABLED
+        value: "false"
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
       - key: DATABASE_URL
-        sync: false
-      - key: QDRANT_URL
-        sync: false
-      - key: QDRANT_API_KEY
         sync: false

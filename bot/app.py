@@ -26,6 +26,7 @@ from .config import (
     DATABASE_URL,
     OPENROUTER_API_KEY,
     PORT,
+    RAG_ENABLED,
     TELEGRAM_BOT_TOKEN,
     WEBHOOK_PATH,
     WEBHOOK_SECRET,
@@ -66,13 +67,18 @@ async def on_startup(bot: Bot) -> None:
     handlers.llm_client = build_client()
     await storage.init_pool(DATABASE_URL)
 
-    # RAG — необязательный контур (см. bot/rag): его сбои в рантайме не
-    # роняют обработку сообщений, поэтому и здесь недоступный Qdrant не
-    # должен блокировать старт бота — просто работаем без похожих заявок.
-    try:
-        await rag.init_rag()
-    except Exception as e:  # noqa: BLE001 — RAG необязателен для работы бота
-        log.error("RAG-контур не инициализирован (бот продолжит без него): %s", e)
+    # RAG — необязательный контур (см. bot/rag). RAG_ENABLED=false — модель
+    # эмбеддингов даже не пытается загрузиться (на бесплатном тарифе Render
+    # это валит процесс OOM ещё до подключения к Qdrant, см. bot/config.py).
+    # Иначе — сбой Qdrant в рантайме тоже не должен блокировать старт бота,
+    # просто работаем без похожих заявок.
+    if not RAG_ENABLED:
+        log.info("RAG-контур выключен (RAG_ENABLED=false).")
+    else:
+        try:
+            await rag.init_rag()
+        except Exception as e:  # noqa: BLE001 — RAG необязателен для работы бота
+            log.error("RAG-контур не инициализирован (бот продолжит без него): %s", e)
 
     if BOT_MODE == "webhook":
         try:
