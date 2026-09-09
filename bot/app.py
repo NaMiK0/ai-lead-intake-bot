@@ -104,8 +104,15 @@ async def on_startup(bot: Bot) -> None:
 
 @dp.shutdown.register
 async def on_shutdown(bot: Bot) -> None:
-    if BOT_MODE == "webhook":
-        await bot.delete_webhook()
+    # Раньше здесь был bot.delete_webhook() в режиме webhook — но Render
+    # усыпляет бесплатный веб-сервис при простое тем же graceful SIGTERM,
+    # что и при обычном редеплое, а dp.shutdown срабатывает на оба случая
+    # одинаково. Удаление вебхука на "усыплении" стирало его у Telegram —
+    # а без вебхука Telegram больше не шлёт запросы, которые могли бы
+    # разбудить инстанс обратно, так что бот "засыпал" навсегда до
+    # ручного вмешательства (баг найден и подтверждён вживую). При
+    # реальном редеплое новый инстанс всё равно перевызывает set_webhook
+    # в on_startup, так что удалять его при остановке старого — не нужно.
     if handlers.llm_client is not None:
         await handlers.llm_client.close()
     await storage.close_pool()
